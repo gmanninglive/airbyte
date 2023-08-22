@@ -47,8 +47,9 @@ class DestinationMeilisearch(Destination):
         try:
             client = get_client(config=config)
 
-            create_index_job = client.create_index("_airbyte", {"primaryKey": "id"})
-            client.wait_for_task(create_index_job["taskUid"])
+            create_index_job = client.create_index(
+                "_airbyte", {"primaryKey": "id"})
+            client.wait_for_task(create_index_job.task_uid)
 
             add_documents_job = client.index("_airbyte").add_documents(
                 [
