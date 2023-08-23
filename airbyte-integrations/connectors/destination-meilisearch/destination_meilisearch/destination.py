@@ -3,7 +3,7 @@
 #
 
 
-from logging import Logger
+from logging import Logger, getLogger
 from typing import Any, Iterable, Mapping
 
 from airbyte_cdk.destinations import Destination
@@ -18,30 +18,32 @@ def get_client(config: Mapping[str, Any]) -> Client:
     return Client(host, api_key)
 
 
+logger = getLogger("airbyte")
+
+
 class DestinationMeilisearch(Destination):
     primary_key = "_ab_pk"
 
-    def write(
-        self, config: Mapping[str, Any], configured_catalog: ConfiguredAirbyteCatalog, input_messages: Iterable[AirbyteMessage]
-    ) -> Iterable[AirbyteMessage]:
+    def write(self, config: Mapping[str, Any], configured_catalog: ConfiguredAirbyteCatalog, input_messages: Iterable[AirbyteMessage]) -> Iterable[AirbyteMessage]:
         client = get_client(config=config)
 
         for configured_stream in configured_catalog.streams:
-            steam_name = configured_stream.stream.name
+            stream_name = configured_stream.stream.name
             if configured_stream.destination_sync_mode == DestinationSyncMode.overwrite:
-                client.delete_index(steam_name)
-            client.create_index(steam_name, {"primaryKey": self.primary_key})
+                client.delete_index(stream_name)
+            client.create_index(stream_name, {"primaryKey": self.primary_key})
 
-            writer = MeiliWriter(client, steam_name, self.primary_key)
-            for message in input_messages:
-                if message.type == Type.STATE:
-                    writer.flush()
-                    yield message
-                elif message.type == Type.RECORD:
-                    writer.queue_write_operation(message.record.data)
-                else:
-                    continue
-            writer.flush()
+            writer = MeiliWriter(
+                client, list(map(lambda s: s.stream.name, configured_catalog.streams)), self.primary_key)
+
+        for message in input_messages:
+            if message.type == Type.STATE:
+                writer.flush()
+            if message.type == Type.RECORD:
+                writer.queue_write_operation(message.record)
+            else:
+                return
+        writer.flush()
 
     def check(self, logger: Logger, config: Mapping[str, Any]) -> AirbyteConnectionStatus:
         try:

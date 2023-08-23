@@ -5,7 +5,8 @@
 import json
 import logging
 import time
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping, Iterable
+from typing import Any
 
 import pytest
 from airbyte_cdk.models import (
@@ -42,8 +43,15 @@ def configured_catalog_fixture() -> ConfiguredAirbyteCatalog:
         sync_mode=SyncMode.incremental,
         destination_sync_mode=DestinationSyncMode.overwrite,
     )
+    overwrite_stream_2 = ConfiguredAirbyteStream(
+        stream=AirbyteStream(
+            name="_airbyte_2", json_schema=stream_schema, supported_sync_modes=[SyncMode.incremental, SyncMode.full_refresh]
+        ),
+        sync_mode=SyncMode.incremental,
+        destination_sync_mode=DestinationSyncMode.overwrite,
+    )
 
-    return ConfiguredAirbyteCatalog(streams=[overwrite_stream])
+    return ConfiguredAirbyteCatalog(streams=[overwrite_stream, overwrite_stream_2])
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +87,7 @@ def test_check_invalid_config():
     assert outcome.status == Status.FAILED
 
 
-def _state(data: Dict[str, Any]) -> AirbyteMessage:
+def _state(data: Mapping[str, Any]) -> AirbyteMessage:
     return AirbyteMessage(type=Type.STATE, state=AirbyteStateMessage(data=data))
 
 
@@ -90,18 +98,21 @@ def _record(stream: str, str_value: str, int_value: int) -> AirbyteMessage:
     )
 
 
-def records_count(client: Client) -> int:
-    documents_results = client.index("_airbyte").get_documents()
-    return documents_results.total
+def records_count(client: Client, streams: Iterable[str]) -> int:
+    total = 0
+    for stream in streams:
+        total += client.index(stream).get_documents().total
+    return total
 
 
 def test_write(config: Mapping, configured_catalog: ConfiguredAirbyteCatalog, client: Client):
-    overwrite_stream = configured_catalog.streams[0].stream.name
+    streams = list(map(lambda s: s.stream.name, configured_catalog.streams))
+
     first_state_message = _state({"state": "1"})
-    first_record_chunk = [_record(overwrite_stream, str(i), i)
-                          for i in range(2)]
+    record_chunks = [_record(stream_name, str(i), i)
+                     for i, stream_name in enumerate(streams)]
 
     destination = DestinationMeilisearch()
-    list(destination.write(config, configured_catalog,
-         [*first_record_chunk, first_state_message]))
-    assert records_count(client) == 2
+    destination.write(config, configured_catalog, [
+                      *record_chunks, first_state_message])
+    assert records_count(client, streams) == 2

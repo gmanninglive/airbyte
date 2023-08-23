@@ -5,19 +5,29 @@
 from unittest.mock import patch
 
 from destination_meilisearch.writer import MeiliWriter
+from airbyte_cdk.models import AirbyteMessage, AirbyteRecordMessage, Type
 
 
 @patch("meilisearch.Client")
 def test_queue_write_operation(client):
-    writer = MeiliWriter(client, "steam_name", "primary_key")
-    writer.queue_write_operation({"a": "a"})
-    assert len(writer.write_buffer) == 1
+    stream_name = "airbyte-testing"
+    writer = MeiliWriter(client, [stream_name], "primary_key")
+    writer.queue_write_operation(_record(stream_name))
+    assert len(writer.write_buffer.get("airbyte-testing")) == 1
 
 
 @patch("meilisearch.Client")
 def test_flush(client):
-    writer = MeiliWriter(client, "steam_name", "primary_key")
-    writer.queue_write_operation({"a": "a"})
+    stream_name = "airbyte-testing"
+    writer = MeiliWriter(client, [stream_name], "primary_key")
+    writer.queue_write_operation(_record(stream_name))
     writer.flush()
-    client.index.assert_called_once_with("steam_name")
+    client.index.assert_called_once_with("airbyte-testing")
     client.wait_for_task.assert_called_once()
+
+
+def _record(stream: str) -> AirbyteMessage:
+    return AirbyteMessage(
+        type=Type.RECORD, record=AirbyteRecordMessage(
+            stream=stream, data={"str_col": "a", "int_col": 1}, emitted_at=0)
+    ).record
