@@ -26,29 +26,30 @@ class DestinationMeilisearch(Destination):
     ) -> Iterable[AirbyteMessage]:
         client = get_client(config=config)
 
+        writer = MeiliWriter(client, self.primary_key)
         for configured_stream in configured_catalog.streams:
-            steam_name = configured_stream.stream.name
+            stream_name = configured_stream.stream.name
             if configured_stream.destination_sync_mode == DestinationSyncMode.overwrite:
-                client.delete_index(steam_name)
-            client.create_index(steam_name, {"primaryKey": self.primary_key})
+                client.delete_index(stream_name)
+            client.create_index(stream_name, {"primaryKey": self.primary_key})
 
-            writer = MeiliWriter(client, steam_name, self.primary_key)
-            for message in input_messages:
-                if message.type == Type.STATE:
-                    writer.flush()
-                    yield message
-                elif message.type == Type.RECORD:
-                    writer.queue_write_operation(message.record.data)
-                else:
-                    continue
-            writer.flush()
+        for message in input_messages:
+            if message.type == Type.STATE:
+                writer.flush()
+                yield message
+            elif message.type == Type.RECORD:
+                record = message.record
+                writer.queue_write_operation(record.stream, record.data)
+            else:
+                return
+        writer.flush()
 
     def check(self, logger: Logger, config: Mapping[str, Any]) -> AirbyteConnectionStatus:
         try:
             client = get_client(config=config)
 
             create_index_job = client.create_index("_airbyte", {"primaryKey": "id"})
-            client.wait_for_task(create_index_job["taskUid"])
+            client.wait_for_task(create_index_job.task_uid)
 
             add_documents_job = client.index("_airbyte").add_documents(
                 [
