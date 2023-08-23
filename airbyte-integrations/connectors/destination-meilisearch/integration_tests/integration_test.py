@@ -98,12 +98,8 @@ def _record(stream: str, str_value: str, int_value: int) -> AirbyteMessage:
     )
 
 
-def records_count(client: Client, streams: Iterable[str]) -> int:
-    total = 0
-    for stream in streams:
-        total += client.index(stream).get_documents().total
-    return total
-
+def records_count(client: Client, stream: str) -> int:
+    return client.index(stream).get_documents().total
 
 def test_write(config: Mapping, configured_catalog: ConfiguredAirbyteCatalog, client: Client):
     streams = list(map(lambda s: s.stream.name, configured_catalog.streams))
@@ -115,4 +111,6 @@ def test_write(config: Mapping, configured_catalog: ConfiguredAirbyteCatalog, cl
     destination = DestinationMeilisearch()
     list(destination.write(config, configured_catalog, [
         *record_chunks, first_state_message]))
-    assert records_count(client, streams) == 2
+    
+    for stream in streams:
+        assert records_count(client, stream) == 1
