@@ -27,20 +27,20 @@ class DestinationMeilisearch(Destination):
     def write(self, config: Mapping[str, Any], configured_catalog: ConfiguredAirbyteCatalog, input_messages: Iterable[AirbyteMessage]) -> Iterable[AirbyteMessage]:
         client = get_client(config=config)
 
+        writer = MeiliWriter(client, self.primary_key)
         for configured_stream in configured_catalog.streams:
             stream_name = configured_stream.stream.name
             if configured_stream.destination_sync_mode == DestinationSyncMode.overwrite:
                 client.delete_index(stream_name)
             client.create_index(stream_name, {"primaryKey": self.primary_key})
 
-            writer = MeiliWriter(
-                client, list(map(lambda s: s.stream.name, configured_catalog.streams)), self.primary_key)
-
         for message in input_messages:
             if message.type == Type.STATE:
                 writer.flush()
+                yield message
             if message.type == Type.RECORD:
-                writer.queue_write_operation(message.record)
+                record = message.record
+                writer.queue_write_operation(record.stream, record.data)
             else:
                 return
         writer.flush()

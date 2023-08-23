@@ -113,6 +113,6 @@ def test_write(config: Mapping, configured_catalog: ConfiguredAirbyteCatalog, cl
                      for i, stream_name in enumerate(streams)]
 
     destination = DestinationMeilisearch()
-    destination.write(config, configured_catalog, [
-                      *record_chunks, first_state_message])
+    list(destination.write(config, configured_catalog, [
+        *record_chunks, first_state_message]))
     assert records_count(client, streams) == 2
