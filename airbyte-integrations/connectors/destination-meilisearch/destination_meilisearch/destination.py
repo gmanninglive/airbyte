@@ -37,7 +37,7 @@ class DestinationMeilisearch(Destination):
             if message.type == Type.STATE:
                 writer.flush()
                 yield message
-            if message.type == Type.RECORD:
+            elif message.type == Type.RECORD:
                 record = message.record
                 writer.queue_write_operation(record.stream, record.data)
             else:

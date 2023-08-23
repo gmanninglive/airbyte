@@ -13,8 +13,8 @@ logger = getLogger("airbyte")
 
 
 class MeiliWriter:
-    flush_interval = 50000
     write_buffer: list[tuple[str, Mapping]] = []
+    flush_interval = 50000
 
     def __init__(self, client: Client, primary_key: str):
         self.client = client
