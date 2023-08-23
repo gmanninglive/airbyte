@@ -3,7 +3,7 @@
 #
 
 
-from logging import Logger, getLogger
+from logging import Logger
 from typing import Any, Iterable, Mapping
 
 from airbyte_cdk.destinations import Destination
@@ -18,13 +18,12 @@ def get_client(config: Mapping[str, Any]) -> Client:
     return Client(host, api_key)
 
 
-logger = getLogger("airbyte")
-
-
 class DestinationMeilisearch(Destination):
     primary_key = "_ab_pk"
 
-    def write(self, config: Mapping[str, Any], configured_catalog: ConfiguredAirbyteCatalog, input_messages: Iterable[AirbyteMessage]) -> Iterable[AirbyteMessage]:
+    def write(
+        self, config: Mapping[str, Any], configured_catalog: ConfiguredAirbyteCatalog, input_messages: Iterable[AirbyteMessage]
+    ) -> Iterable[AirbyteMessage]:
         client = get_client(config=config)
 
         writer = MeiliWriter(client, self.primary_key)
@@ -49,8 +48,7 @@ class DestinationMeilisearch(Destination):
         try:
             client = get_client(config=config)
 
-            create_index_job = client.create_index(
-                "_airbyte", {"primaryKey": "id"})
+            create_index_job = client.create_index("_airbyte", {"primaryKey": "id"})
             client.wait_for_task(create_index_job.task_uid)
 
             add_documents_job = client.index("_airbyte").add_documents(
